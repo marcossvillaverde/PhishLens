@@ -11,12 +11,14 @@ import sys
 from pathlib import Path
 
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
 
 from phishlens.checks.autenticacion import ResultadoAutenticacion, comprobar_autenticacion
 from phishlens.checks.heuristicas import comprobar_heuristicas
 from phishlens.checks.modelos import Hallazgo, Severidad
 from phishlens.parser import CorreoParseado, parsear_eml
+from phishlens.scoring import ResultadoPuntuacion, Veredicto, puntuar
 
 consola = Console()
 
@@ -96,6 +98,20 @@ def mostrar_hallazgos(hallazgos: list[Hallazgo]) -> None:
     consola.print(tabla)
 
 
+def mostrar_puntuacion(resultado: ResultadoPuntuacion) -> None:
+    """Muestra la puntuación final y el veredicto de las reglas deterministas."""
+    colores = {Veredicto.LIMPIO: "green", Veredicto.SOSPECHOSO: "yellow", Veredicto.PHISHING: "bold red"}
+    color = colores[resultado.veredicto]
+    desglose = "  ".join(f"{codigo} +{puntos}" for codigo, puntos in resultado.desglose.items() if puntos)
+    consola.print(Panel(
+        f"[{color}]Veredicto: {resultado.veredicto.value.upper()}[/{color}]\n"
+        f"Puntuación de riesgo: [bold]{resultado.puntuacion}/100[/bold]\n\n"
+        f"[dim]{desglose or 'Sin hallazgos que sumen riesgo'}[/dim]",
+        title="Resultado (reglas deterministas)",
+        border_style=color,
+    ))
+
+
 def main() -> int:
     argumentos = argparse.ArgumentParser(
         prog="phishlens",
@@ -120,6 +136,8 @@ def main() -> int:
 
     hallazgos = hallazgos_auth + comprobar_heuristicas(correo)
     mostrar_hallazgos(hallazgos)
+
+    mostrar_puntuacion(puntuar(hallazgos))
     return 0
 
 

@@ -1,0 +1,40 @@
+Return-Path: <boletin@ejemplo-tienda.es>
+Received: from mx.ejemplo-destino.es (mx.ejemplo-destino.es [192.168.1.10])
+	by buzon.ejemplo-destino.es with ESMTP id 22222
+	for <cliente@ejemplo-destino.es>; Mon, 21 Sep 2026 09:00:05 +0200
+Received: from correo.ejemplo-tienda.es (correo.ejemplo-tienda.es [203.0.113.20])
+	by mx.ejemplo-destino.es with ESMTPS id 11111
+	for <cliente@ejemplo-destino.es>; Mon, 21 Sep 2026 09:00:03 +0200
+Authentication-Results: mx.ejemplo-destino.es; spf=pass smtp.mailfrom=ejemplo-tienda.es; dkim=pass header.d=ejemplo-tienda.es; dmarc=pass header.from=ejemplo-tienda.es
+From: "Ejemplo Tienda" <boletin@ejemplo-tienda.es>
+To: cliente@ejemplo-destino.es
+Subject: Novedades de septiembre
+Date: Mon, 21 Sep 2026 09:00:00 +0200
+Message-ID: <boletin-0921@ejemplo-tienda.es>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="LIMITE"
+
+--LIMITE
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: 8bit
+
+Hola:
+
+Ya están disponibles las novedades de septiembre en nuestra web:
+https://www.ejemplo-tienda.es/novedades
+
+Un saludo,
+El equipo de Ejemplo Tienda
+
+--LIMITE
+Content-Type: text/html; charset="UTF-8"
+Content-Transfer-Encoding: 8bit
+
+<html><body>
+<p>Hola:</p>
+<p>Ya est&aacute;n disponibles las novedades de septiembre en nuestra web:
+<a href="https://www.ejemplo-tienda.es/novedades">www.ejemplo-tienda.es/novedades</a></p>
+<p>Un saludo,<br>El equipo de Ejemplo Tienda</p>
+</body></html>
+
+--LIMITE--
