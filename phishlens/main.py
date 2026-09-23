@@ -2,7 +2,8 @@
 Punto de entrada de PhishLens por línea de comandos.
 
 Uso:
-    python -m phishlens.main ruta/al/correo.eml
+    python -m phishlens.main ruta/al/correo.eml            (con verificación DNS en línea)
+    python -m phishlens.main ruta/al/correo.eml --sin-red  (solo datos del propio correo)
 """
 
 import argparse
@@ -12,15 +13,25 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
-from phishlens.parser import parsear_eml
+from phishlens.checks.autenticacion import ResultadoAutenticacion, comprobar_autenticacion
+from phishlens.checks.heuristicas import comprobar_heuristicas
+from phishlens.checks.modelos import Hallazgo, Severidad
+from phishlens.parser import CorreoParseado, parsear_eml
 
 consola = Console()
 
+# Colores para cada severidad en la terminal
+COLORES = {
+    Severidad.INFO: "white",
+    Severidad.BAJA: "green",
+    Severidad.MEDIA: "yellow",
+    Severidad.ALTA: "red",
+    Severidad.CRITICA: "bold red",
+}
 
-def mostrar_parseo(ruta: Path) -> None:
+
+def mostrar_parseo(correo: CorreoParseado) -> None:
     """Muestra por pantalla lo que el parser ha extraído del correo."""
-    correo = parsear_eml(ruta)
-
     # --- Cabeceras ---
     tabla = Table(title="Cabeceras", show_header=False)
     tabla.add_column("Campo", style="bold cyan")
@@ -55,19 +66,60 @@ def mostrar_parseo(ruta: Path) -> None:
     consola.print(tabla)
 
 
+def mostrar_autenticacion(resultado: ResultadoAutenticacion) -> None:
+    """Muestra el resumen de SPF, DKIM y DMARC."""
+    fuente = "verificación DNS propia" if resultado.fuente == "en_linea" else "cabecera Authentication-Results"
+    tabla = Table(title=f"Autenticación ({fuente})", show_header=False)
+    tabla.add_column("Mecanismo", style="bold cyan")
+    tabla.add_column("Resultado")
+    tabla.add_row("SPF", resultado.spf)
+    tabla.add_row("DKIM", resultado.dkim)
+    tabla.add_row("DMARC", resultado.dmarc)
+    if resultado.politica_dmarc:
+        tabla.add_row("Política DMARC", resultado.politica_dmarc)
+    consola.print(tabla)
+
+
+def mostrar_hallazgos(hallazgos: list[Hallazgo]) -> None:
+    """Muestra los hallazgos ordenados de más a menos grave."""
+    orden = list(Severidad)
+    hallazgos = sorted(hallazgos, key=lambda h: orden.index(h.severidad), reverse=True)
+
+    tabla = Table(title=f"Hallazgos ({len(hallazgos)})")
+    tabla.add_column("Severidad")
+    tabla.add_column("Código", style="bold")
+    tabla.add_column("Descripción")
+    tabla.add_column("Evidencia", style="dim")
+    for h in hallazgos:
+        color = COLORES[h.severidad]
+        tabla.add_row(f"[{color}]{h.severidad.value.upper()}[/{color}]", h.codigo, h.descripcion, h.evidencia or "-")
+    consola.print(tabla)
+
+
 def main() -> int:
     argumentos = argparse.ArgumentParser(
         prog="phishlens",
         description="Analizador de correos de phishing con IA",
     )
     argumentos.add_argument("eml", type=Path, help="ruta al fichero .eml a analizar")
+    argumentos.add_argument(
+        "--sin-red", action="store_true",
+        help="no hacer consultas DNS; usar solo la cabecera Authentication-Results",
+    )
     args = argumentos.parse_args()
 
     if not args.eml.is_file():
         consola.print(f"[red]Error:[/red] no existe el fichero {args.eml}")
         return 1
 
-    mostrar_parseo(args.eml)
+    correo = parsear_eml(args.eml)
+    mostrar_parseo(correo)
+
+    resultado_auth, hallazgos_auth = comprobar_autenticacion(correo, en_linea=not args.sin_red)
+    mostrar_autenticacion(resultado_auth)
+
+    hallazgos = hallazgos_auth + comprobar_heuristicas(correo)
+    mostrar_hallazgos(hallazgos)
     return 0
 
 
