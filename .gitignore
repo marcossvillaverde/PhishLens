@@ -15,3 +15,6 @@ reports/
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Caché de consultas a servicios de reputación
+.cache/

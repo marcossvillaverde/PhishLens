@@ -2,8 +2,9 @@
 Punto de entrada de PhishLens por línea de comandos.
 
 Uso:
-    python -m phishlens.main ruta/al/correo.eml            (con verificación DNS en línea)
-    python -m phishlens.main ruta/al/correo.eml --sin-red  (solo datos del propio correo)
+    python -m phishlens.main correo.eml                   análisis completo
+    python -m phishlens.main correo.eml --sin-reputacion  sin consultar VirusTotal, AbuseIPDB ni urlscan
+    python -m phishlens.main correo.eml --sin-red         sin ninguna conexión (ni DNS ni reputación)
 """
 
 import argparse
@@ -17,6 +18,9 @@ from rich.table import Table
 from phishlens.checks.autenticacion import ResultadoAutenticacion, comprobar_autenticacion
 from phishlens.checks.heuristicas import comprobar_heuristicas
 from phishlens.checks.modelos import Hallazgo, Severidad
+from phishlens.config import cargar_config
+from phishlens.enrichment.base import ResultadoReputacion
+from phishlens.enrichment.enriquecer import enriquecer
 from phishlens.parser import CorreoParseado, parsear_eml
 from phishlens.scoring import ResultadoPuntuacion, Veredicto, puntuar
 
@@ -82,6 +86,31 @@ def mostrar_autenticacion(resultado: ResultadoAutenticacion) -> None:
     consola.print(tabla)
 
 
+def mostrar_reputacion(resultados: list[ResultadoReputacion]) -> None:
+    """Muestra lo que han respondido los servicios de reputación."""
+    tabla = Table(title=f"Reputación ({len(resultados)} consultas)")
+    tabla.add_column("Servicio", style="bold cyan")
+    tabla.add_column("Tipo")
+    tabla.add_column("Indicador", overflow="fold")
+    tabla.add_column("Resultado")
+    for r in resultados:
+        if r.error:
+            texto = f"[yellow]error: {r.error}[/yellow]"
+        elif not r.encontrado:
+            texto = "[dim]sin datos[/dim]"
+        elif r.servicio == "virustotal":
+            texto = f"{r.datos['maliciosos']} maliciosos / {r.datos['sospechosos']} sospechosos"
+        elif r.servicio == "abuseipdb":
+            texto = f"abuso {r.datos['puntuacion_abuso']}/100 ({r.datos['total_reportes']} reportes)"
+        else:
+            texto = f"{r.datos['escaneos_previos']} escaneos previos"
+        if r.desde_cache:
+            texto += " [dim](caché)[/dim]"
+        indicador = r.indicador if len(r.indicador) <= 70 else r.indicador[:67] + "..."
+        tabla.add_row(r.servicio, r.tipo, indicador, texto)
+    consola.print(tabla)
+
+
 def mostrar_hallazgos(hallazgos: list[Hallazgo]) -> None:
     """Muestra los hallazgos ordenados de más a menos grave."""
     orden = list(Severidad)
@@ -119,8 +148,12 @@ def main() -> int:
     )
     argumentos.add_argument("eml", type=Path, help="ruta al fichero .eml a analizar")
     argumentos.add_argument(
+        "--sin-reputacion", action="store_true",
+        help="no consultar VirusTotal, AbuseIPDB ni urlscan.io",
+    )
+    argumentos.add_argument(
         "--sin-red", action="store_true",
-        help="no hacer consultas DNS; usar solo la cabecera Authentication-Results",
+        help="no hacer ninguna conexión: ni DNS (se usa Authentication-Results) ni reputación",
     )
     args = argumentos.parse_args()
 
@@ -135,6 +168,13 @@ def main() -> int:
     mostrar_autenticacion(resultado_auth)
 
     hallazgos = hallazgos_auth + comprobar_heuristicas(correo)
+
+    if not (args.sin_red or args.sin_reputacion):
+        with consola.status("Consultando servicios de reputación..."):
+            resultados_rep, hallazgos_rep = enriquecer(correo, cargar_config())
+        mostrar_reputacion(resultados_rep)
+        hallazgos += hallazgos_rep
+
     mostrar_hallazgos(hallazgos)
 
     mostrar_puntuacion(puntuar(hallazgos))
