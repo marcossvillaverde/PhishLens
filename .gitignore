@@ -1,0 +1,17 @@
+# Entorno virtual de Python
+.venv/
+
+# Claves de API y configuración local (nunca se suben)
+.env
+
+# Correos de prueba: pueden contener malware o datos personales
+samples/*
+!samples/.gitkeep
+
+# Informes generados
+reports/
+
+# Ficheros temporales de Python
+__pycache__/
+*.pyc
+.pytest_cache/
