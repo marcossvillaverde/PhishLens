@@ -7,7 +7,7 @@ from pathlib import Path
 
 from phishlens.checks.autenticacion import comprobar_autenticacion
 from phishlens.checks.heuristicas import comprobar_heuristicas
-from phishlens.llm.esquema import validar_respuesta
+from phishlens.llm.esquema import ajustar_a_evidencias, validar_respuesta
 from phishlens.llm.prompt import construir_mensaje
 from phishlens.llm.saneamiento import (
     buscar_inyeccion,
@@ -113,7 +113,7 @@ def test_token_aleatorio_distinto_cada_vez():
 # --- Validación de la respuesta ---
 
 RESPUESTA_VALIDA = """{
-  "es_phishing_probable": true, "confianza": 0.95, "tipo_fraude": "robo_credenciales",
+  "probabilidad_phishing": 0.95, "tipo_fraude": "robo_credenciales",
   "tacticas": ["urgencia", "suplantacion_marca"], "tecnicas_mitre": ["T1566.002"],
   "explicacion": "Suplanta a PayPal y mete prisa.", "recomendacion": "No hagas clic."
 }"""
@@ -121,7 +121,7 @@ RESPUESTA_VALIDA = """{
 
 def test_respuesta_valida():
     analisis, avisos = validar_respuesta(RESPUESTA_VALIDA)
-    assert analisis and analisis.es_phishing_probable and analisis.confianza == 0.95
+    assert analisis and analisis.es_phishing_probable and analisis.probabilidad_phishing == 0.95
     assert analisis.tecnicas_mitre == ["T1566.002"] and avisos == []
 
 
@@ -148,3 +148,20 @@ def test_enlaces_en_la_explicacion_se_eliminan():
     texto = RESPUESTA_VALIDA.replace("Suplanta a PayPal", "Visita https://malo.example/login para verlo")
     analisis, _ = validar_respuesta(texto)
     assert "malo.example" not in analisis.explicacion
+
+
+def test_probabilidad_booleana_se_rechaza():
+    analisis, _ = validar_respuesta(RESPUESTA_VALIDA.replace("0.95", "true"))
+    assert analisis is None
+
+
+def test_legitimo_con_probabilidad_baja():
+    analisis, _ = validar_respuesta(RESPUESTA_VALIDA.replace("0.95", "0.1"))
+    assert not analisis.es_phishing_probable
+
+
+def test_mitre_incoherente_con_evidencias_se_descarta():
+    analisis, _ = validar_respuesta(RESPUESTA_VALIDA.replace('["T1566.002"]', '["T1566.001", "T1566.002"]'))
+    avisos = ajustar_a_evidencias(analisis, adjunto_sospechoso=False, hay_enlaces=True)
+    assert analisis.tecnicas_mitre == ["T1566.002"]
+    assert "adjunto" in avisos[0]

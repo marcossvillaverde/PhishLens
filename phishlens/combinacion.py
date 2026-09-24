@@ -3,7 +3,7 @@ Combinación del veredicto de las reglas con el análisis de la IA.
 
 Principio de diseño: EL MOTOR DETERMINISTA DECIDE Y LA IA INTERPRETA.
   - La IA puede SUBIR el veredicto como mucho un nivel (limpio -> sospechoso,
-    sospechoso -> phishing), y solo si está segura (confianza >= 0.7).
+    sospechoso -> phishing), y solo si está segura (probabilidad de phishing >= 0.7).
   - La IA NUNCA puede bajar el veredicto. Si no está de acuerdo con unas
     reglas que ven riesgo, se mantiene el veredicto y se pide revisión manual.
 Así, aunque un atacante consiguiera manipular al modelo, no podría hacer
@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from phishlens.llm.analizador import ResultadoIA
 from phishlens.scoring import ResultadoPuntuacion, Veredicto
 
-UMBRAL_CONFIANZA = 0.7
+UMBRAL_SUBIR = 0.7       # probabilidad a partir de la cual la IA puede subir el veredicto
 ORDEN = [Veredicto.LIMPIO, Veredicto.SOSPECHOSO, Veredicto.PHISHING]
 
 
@@ -38,7 +38,7 @@ def combinar(puntuacion: ResultadoPuntuacion, ia: ResultadoIA | None) -> Veredic
         return VeredictoFinal(reglas, revision_manual=False, motivo=motivo, **base)
 
     analisis = ia.analisis
-    segura = analisis.confianza >= UMBRAL_CONFIANZA
+    segura = analisis.probabilidad_phishing >= UMBRAL_SUBIR
 
     # La IA ve phishing con seguridad: puede subir un nivel
     if analisis.es_phishing_probable and segura:

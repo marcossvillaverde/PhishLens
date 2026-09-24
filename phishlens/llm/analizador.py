@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 
 from phishlens.checks.autenticacion import ResultadoAutenticacion
 from phishlens.checks.modelos import Hallazgo
-from phishlens.llm.esquema import AnalisisIA, validar_respuesta
+from phishlens.llm.esquema import AnalisisIA, ajustar_a_evidencias, validar_respuesta
 from phishlens.llm.prompt import PROMPT_SISTEMA, construir_mensaje
 from phishlens.llm.proveedores import ErrorProveedor
 from phishlens.llm.saneamiento import ContenidoSaneado
@@ -46,4 +46,10 @@ def analizar_con_ia(correo: CorreoParseado, saneado: ContenidoSaneado, auth: Res
     resultado.analisis, resultado.avisos = validar_respuesta(respuesta)
     if resultado.analisis is None:
         resultado.error = "la respuesta de la IA no cumple el esquema y se ha descartado"
+        return resultado
+
+    # La IA no puede afirmar nada que contradiga las evidencias del propio correo
+    adjunto_sospechoso = any(h.codigo.startswith("ADJUNTO_") for h in hallazgos)
+    resultado.avisos += ajustar_a_evidencias(resultado.analisis, adjunto_sospechoso=adjunto_sospechoso,
+                                             hay_enlaces=bool(correo.urls))
     return resultado

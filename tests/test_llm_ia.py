@@ -66,9 +66,9 @@ class ProveedorFalso:
         return self.respuesta
 
 
-def _json_ia(es_phishing, confianza, tipo="robo_credenciales"):
+def _json_ia(probabilidad, tipo="robo_credenciales"):
     return json.dumps({
-        "es_phishing_probable": es_phishing, "confianza": confianza, "tipo_fraude": tipo,
+        "probabilidad_phishing": probabilidad, "tipo_fraude": tipo,
         "tacticas": ["urgencia"], "tecnicas_mitre": ["T1566.002"],
         "explicacion": "Explicación de prueba.", "recomendacion": "No hagas clic.",
     })
@@ -122,10 +122,18 @@ def test_crear_proveedor_valida_configuracion():
 # --- Analizador ---
 
 def test_analisis_correcto():
-    proveedor = ProveedorFalso(_json_ia(True, 0.9))
+    proveedor = ProveedorFalso(_json_ia(0.9))
     resultado = analizar_con_ia(*_preparar("phishing_simple.eml"), proveedor)
     assert resultado.analisis and resultado.analisis.es_phishing_probable
     assert "<<<INICIO_" in proveedor.mensaje_recibido     # el prompt lleva los delimitadores
+
+
+def test_adjunto_inofensivo_no_justifica_t1566_001():
+    # El correo de prueba lleva un .txt inofensivo: "adjunto malicioso" no es coherente
+    respuesta = _json_ia(0.9).replace('["T1566.002"]', '["T1566.001", "T1566.002"]')
+    resultado = analizar_con_ia(*_preparar("phishing_simple.eml"), ProveedorFalso(respuesta))
+    assert resultado.analisis.tecnicas_mitre == ["T1566.002"]
+    assert any("T1566.001" in aviso for aviso in resultado.avisos)
 
 
 def test_respuesta_invalida_se_descarta():
@@ -144,8 +152,8 @@ def _puntuacion(veredicto):
     return ResultadoPuntuacion(puntuacion=50, veredicto=veredicto)
 
 
-def _ia(es_phishing, confianza):
-    return ResultadoIA(proveedor="falso", analisis=AnalisisIA(es_phishing, confianza, "otro", explicacion="x"))
+def _ia(probabilidad):
+    return ResultadoIA(proveedor="falso", analisis=AnalisisIA(probabilidad, "otro", explicacion="x"))
 
 
 def test_sin_ia_se_usan_las_reglas():
@@ -154,18 +162,19 @@ def test_sin_ia_se_usan_las_reglas():
 
 
 def test_ia_segura_sube_un_nivel():
-    final = combinar(_puntuacion(Veredicto.LIMPIO), _ia(True, 0.9))
+    final = combinar(_puntuacion(Veredicto.LIMPIO), _ia(0.9))
     assert final.veredicto == Veredicto.SOSPECHOSO and final.revision_manual
 
 
 def test_ia_poco_segura_no_cambia_nada():
-    final = combinar(_puntuacion(Veredicto.LIMPIO), _ia(True, 0.5))
+    # 0.6: la IA se inclina por phishing, pero no lo bastante para cambiar el veredicto
+    final = combinar(_puntuacion(Veredicto.LIMPIO), _ia(0.6))
     assert final.veredicto == Veredicto.LIMPIO and not final.revision_manual
 
 
 def test_ia_nunca_baja_el_veredicto():
     # Aunque la IA diga con total seguridad que es legítimo, el phishing sigue siendo phishing
-    final = combinar(_puntuacion(Veredicto.PHISHING), _ia(False, 1.0))
+    final = combinar(_puntuacion(Veredicto.PHISHING), _ia(0.0))
     assert final.veredicto == Veredicto.PHISHING and final.revision_manual
 
 
@@ -173,7 +182,7 @@ def test_ia_manipulada_no_salva_al_atacante():
     # Escenario completo: el correo de prueba con inyección y una IA "engañada"
     correo, saneado, auth, hallazgos, puntuacion = _preparar("phishing_simple.eml")
     ia = analizar_con_ia(correo, saneado, auth, hallazgos, puntuacion,
-                         ProveedorFalso(_json_ia(False, 1.0, "legitimo")))
+                         ProveedorFalso(_json_ia(0.0, "legitimo")))
     final = combinar(puntuacion, ia)
     assert final.veredicto == Veredicto.PHISHING
     assert final.revision_manual

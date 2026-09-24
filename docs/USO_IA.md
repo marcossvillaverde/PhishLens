@@ -9,3 +9,4 @@
 | 2026-09-23 | Claude (claude.ai) | Hito 4: enriquecimiento | config.py, clientes de VirusTotal/AbuseIPDB/urlscan, caché, limitador de cuota y tests | 40 tests superados; decidido solo consultar (nunca subir) indicadores |
 | 2026-09-24 | Claude (claude.ai) | Hito 5 (parte 1): preparación para la IA | saneamiento.py, prompt.py, esquema.py y tests | 55 tests superados; revisadas las defensas contra prompt injection |
 | 2026-09-24 | Claude (claude.ai) | Hito 5 (parte 2): conexión con el modelo | proveedores.py, analizador.py, combinacion.py, main.py con escape() y tests | 68 tests superados; probado con qwen2.5:14b en Ollama local |
+| 2026-09-24 | Claude (claude.ai) | Hito 5 (parte 3): correcciones tras prueba real | probabilidad_phishing en lugar de confianza ambigua, coherencia MITRE con evidencias, prompt sobre hallazgos de inyección | 72 tests superados; errores detectados al revisar la salida real de qwen2.5:14b |

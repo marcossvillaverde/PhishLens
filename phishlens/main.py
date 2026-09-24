@@ -163,8 +163,8 @@ def mostrar_ia(resultado: ResultadoIA) -> None:
 
     a = resultado.analisis
     lineas = [
-        f"[bold]¿Phishing?[/bold] {'sí' if a.es_phishing_probable else 'no'} "
-        f"(confianza {a.confianza:.0%})",
+        f"[bold]Probabilidad de phishing:[/bold] {a.probabilidad_phishing:.0%} "
+        f"({'phishing probable' if a.es_phishing_probable else 'probablemente legítimo'})",
         f"[bold]Tipo de fraude:[/bold] {escape(a.tipo_fraude)}",
         f"[bold]Tácticas:[/bold] {escape(', '.join(a.tacticas) or '-')}",
         f"[bold]MITRE ATT&CK:[/bold] {escape(', '.join(a.tecnicas_mitre) or '-')}",

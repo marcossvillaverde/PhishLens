@@ -29,18 +29,25 @@ TECNICAS_MITRE = {
     "T1204.001", "T1204.002", "T1656", "T1534",
 }
 
+# Técnicas que solo tienen sentido si el correo contiene ese tipo de evidencia
+REQUIEREN_ADJUNTO_SOSPECHOSO = {"T1566.001", "T1204.002"}
+REQUIEREN_ENLACE = {"T1566.002", "T1598.003", "T1204.001"}
+
 MAX_LONGITUD_TEXTO = 1200
 
 
 @dataclass
 class AnalisisIA:
-    es_phishing_probable: bool
-    confianza: float
+    probabilidad_phishing: float        # 0 = seguro que es legítimo, 1 = seguro que es phishing
     tipo_fraude: str
     tacticas: list[str] = field(default_factory=list)
     tecnicas_mitre: list[str] = field(default_factory=list)
     explicacion: str = ""
     recomendacion: str = ""
+
+    @property
+    def es_phishing_probable(self) -> bool:
+        return self.probabilidad_phishing >= 0.5
 
 
 def _extraer_json(texto: str) -> dict | None:
@@ -72,17 +79,16 @@ def validar_respuesta(texto: str) -> tuple[AnalisisIA | None, list[str]]:
     if datos is None:
         return None, ["la respuesta de la IA no es un JSON válido"]
 
-    es_phishing = datos.get("es_phishing_probable")
-    if not isinstance(es_phishing, bool):
-        return None, ["falta 'es_phishing_probable' o no es booleano"]
-
+    valor = datos.get("probabilidad_phishing")
+    if isinstance(valor, bool):
+        return None, ["'probabilidad_phishing' debe ser un número, no un booleano"]
     try:
-        confianza = float(datos.get("confianza"))
+        probabilidad = float(valor)
     except (TypeError, ValueError):
-        return None, ["falta 'confianza' o no es numérica"]
-    if not 0 <= confianza <= 1:
-        avisos.append(f"confianza fuera de rango ({confianza}); se ajusta")
-        confianza = min(1.0, max(0.0, confianza))
+        return None, ["falta 'probabilidad_phishing' o no es numérica"]
+    if not 0 <= probabilidad <= 1:
+        avisos.append(f"probabilidad fuera de rango ({probabilidad}); se ajusta")
+        probabilidad = min(1.0, max(0.0, probabilidad))
 
     tipo = str(datos.get("tipo_fraude", "")).strip().lower()
     if tipo not in TIPOS_FRAUDE:
@@ -111,11 +117,29 @@ def validar_respuesta(texto: str) -> tuple[AnalisisIA | None, list[str]]:
         return None, avisos + ["la IA no ha dado ninguna explicación"]
 
     return AnalisisIA(
-        es_phishing_probable=es_phishing,
-        confianza=confianza,
+        probabilidad_phishing=probabilidad,
         tipo_fraude=tipo,
         tacticas=tacticas,
         tecnicas_mitre=tecnicas,
         explicacion=explicacion,
         recomendacion=_limpiar_texto(datos.get("recomendacion")),
     ), avisos
+
+
+def ajustar_a_evidencias(analisis: AnalisisIA, adjunto_sospechoso: bool, hay_enlaces: bool) -> list[str]:
+    """
+    Elimina técnicas MITRE que contradicen las evidencias del correo
+    (por ejemplo, "adjunto malicioso" cuando ningún adjunto ha dado indicios de riesgo).
+    Devuelve los avisos de lo que se ha quitado.
+    """
+    avisos = []
+    validas = []
+    for tecnica in analisis.tecnicas_mitre:
+        if tecnica in REQUIEREN_ADJUNTO_SOSPECHOSO and not adjunto_sospechoso:
+            avisos.append(f"{tecnica} descartada: ningún adjunto presenta indicios de riesgo")
+        elif tecnica in REQUIEREN_ENLACE and not hay_enlaces:
+            avisos.append(f"{tecnica} descartada: el correo no tiene enlaces")
+        else:
+            validas.append(tecnica)
+    analisis.tecnicas_mitre = validas
+    return avisos
