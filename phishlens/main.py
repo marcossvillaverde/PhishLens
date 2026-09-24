@@ -3,8 +3,14 @@ Punto de entrada de PhishLens por línea de comandos.
 
 Uso:
     python -m phishlens.main correo.eml                   análisis completo
+    python -m phishlens.main correo.eml --sin-ia          sin el análisis del modelo de lenguaje
     python -m phishlens.main correo.eml --sin-reputacion  sin consultar VirusTotal, AbuseIPDB ni urlscan
-    python -m phishlens.main correo.eml --sin-red         sin ninguna conexión (ni DNS ni reputación)
+    python -m phishlens.main correo.eml --sin-red         sin conexiones a internet (ni DNS, ni reputación,
+                                                          ni API externa; Ollama local sí se usa)
+
+Seguridad: todo el texto que procede del correo o de la IA se muestra con
+escape() para que no pueda inyectar marcas de formato en la terminal
+(por ejemplo, un asunto con "[link=...]" que cree enlaces falsos).
 """
 
 import argparse
@@ -12,15 +18,20 @@ import sys
 from pathlib import Path
 
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
 from phishlens.checks.autenticacion import ResultadoAutenticacion, comprobar_autenticacion
 from phishlens.checks.heuristicas import comprobar_heuristicas
 from phishlens.checks.modelos import Hallazgo, Severidad
+from phishlens.combinacion import VeredictoFinal, combinar
 from phishlens.config import cargar_config
 from phishlens.enrichment.base import ResultadoReputacion
 from phishlens.enrichment.enriquecer import enriquecer
+from phishlens.llm.analizador import ResultadoIA, analizar_con_ia
+from phishlens.llm.proveedores import ErrorProveedor, crear_proveedor
+from phishlens.llm.saneamiento import sanear
 from phishlens.parser import CorreoParseado, parsear_eml
 from phishlens.scoring import ResultadoPuntuacion, Veredicto, puntuar
 
@@ -34,6 +45,7 @@ COLORES = {
     Severidad.ALTA: "red",
     Severidad.CRITICA: "bold red",
 }
+COLORES_VEREDICTO = {Veredicto.LIMPIO: "green", Veredicto.SOSPECHOSO: "yellow", Veredicto.PHISHING: "bold red"}
 
 
 def mostrar_parseo(correo: CorreoParseado) -> None:
@@ -42,12 +54,12 @@ def mostrar_parseo(correo: CorreoParseado) -> None:
     tabla = Table(title="Cabeceras", show_header=False)
     tabla.add_column("Campo", style="bold cyan")
     tabla.add_column("Valor")
-    tabla.add_row("From", f"{correo.remitente_nombre} <{correo.remitente}>")
-    tabla.add_row("Reply-To", correo.reply_to or "-")
-    tabla.add_row("Return-Path", correo.return_path or "-")
-    tabla.add_row("Para", ", ".join(correo.destinatarios) or "-")
-    tabla.add_row("Asunto", correo.asunto or "-")
-    tabla.add_row("Fecha", correo.fecha or "-")
+    tabla.add_row("From", escape(f"{correo.remitente_nombre} <{correo.remitente}>"))
+    tabla.add_row("Reply-To", escape(correo.reply_to or "-"))
+    tabla.add_row("Return-Path", escape(correo.return_path or "-"))
+    tabla.add_row("Para", escape(", ".join(correo.destinatarios) or "-"))
+    tabla.add_row("Asunto", escape(correo.asunto or "-"))
+    tabla.add_row("Fecha", escape(correo.fecha or "-"))
     tabla.add_row("IP de origen", correo.ip_origen or "no encontrada")
     tabla.add_row("Saltos (Received)", str(len(correo.received)))
     consola.print(tabla)
@@ -58,7 +70,7 @@ def mostrar_parseo(correo: CorreoParseado) -> None:
     tabla.add_column("Texto visible")
     tabla.add_column("Origen")
     for url in correo.urls:
-        tabla.add_row(url.url, url.texto_visible or "-", url.origen)
+        tabla.add_row(escape(url.url), escape(url.texto_visible or "-"), url.origen)
     consola.print(tabla)
 
     # --- Adjuntos ---
@@ -68,7 +80,7 @@ def mostrar_parseo(correo: CorreoParseado) -> None:
     tabla.add_column("Tamaño")
     tabla.add_column("SHA-256")
     for adjunto in correo.adjuntos:
-        tabla.add_row(adjunto.nombre, adjunto.tipo_mime, f"{adjunto.tamano} B", adjunto.sha256)
+        tabla.add_row(escape(adjunto.nombre), escape(adjunto.tipo_mime), f"{adjunto.tamano} B", adjunto.sha256)
     consola.print(tabla)
 
 
@@ -78,11 +90,11 @@ def mostrar_autenticacion(resultado: ResultadoAutenticacion) -> None:
     tabla = Table(title=f"Autenticación ({fuente})", show_header=False)
     tabla.add_column("Mecanismo", style="bold cyan")
     tabla.add_column("Resultado")
-    tabla.add_row("SPF", resultado.spf)
-    tabla.add_row("DKIM", resultado.dkim)
-    tabla.add_row("DMARC", resultado.dmarc)
+    tabla.add_row("SPF", escape(resultado.spf))
+    tabla.add_row("DKIM", escape(resultado.dkim))
+    tabla.add_row("DMARC", escape(resultado.dmarc))
     if resultado.politica_dmarc:
-        tabla.add_row("Política DMARC", resultado.politica_dmarc)
+        tabla.add_row("Política DMARC", escape(resultado.politica_dmarc))
     consola.print(tabla)
 
 
@@ -95,7 +107,7 @@ def mostrar_reputacion(resultados: list[ResultadoReputacion]) -> None:
     tabla.add_column("Resultado")
     for r in resultados:
         if r.error:
-            texto = f"[yellow]error: {r.error}[/yellow]"
+            texto = f"[yellow]error: {escape(r.error)}[/yellow]"
         elif not r.encontrado:
             texto = "[dim]sin datos[/dim]"
         elif r.servicio == "virustotal":
@@ -107,7 +119,7 @@ def mostrar_reputacion(resultados: list[ResultadoReputacion]) -> None:
         if r.desde_cache:
             texto += " [dim](caché)[/dim]"
         indicador = r.indicador if len(r.indicador) <= 70 else r.indicador[:67] + "..."
-        tabla.add_row(r.servicio, r.tipo, indicador, texto)
+        tabla.add_row(r.servicio, r.tipo, escape(indicador), texto)
     consola.print(tabla)
 
 
@@ -123,14 +135,14 @@ def mostrar_hallazgos(hallazgos: list[Hallazgo]) -> None:
     tabla.add_column("Evidencia", style="dim")
     for h in hallazgos:
         color = COLORES[h.severidad]
-        tabla.add_row(f"[{color}]{h.severidad.value.upper()}[/{color}]", h.codigo, h.descripcion, h.evidencia or "-")
+        tabla.add_row(f"[{color}]{h.severidad.value.upper()}[/{color}]", h.codigo,
+                      escape(h.descripcion), escape(h.evidencia or "-"))
     consola.print(tabla)
 
 
 def mostrar_puntuacion(resultado: ResultadoPuntuacion) -> None:
-    """Muestra la puntuación final y el veredicto de las reglas deterministas."""
-    colores = {Veredicto.LIMPIO: "green", Veredicto.SOSPECHOSO: "yellow", Veredicto.PHISHING: "bold red"}
-    color = colores[resultado.veredicto]
+    """Muestra la puntuación y el veredicto de las reglas deterministas."""
+    color = COLORES_VEREDICTO[resultado.veredicto]
     desglose = "  ".join(f"{codigo} +{puntos}" for codigo, puntos in resultado.desglose.items() if puntos)
     consola.print(Panel(
         f"[{color}]Veredicto: {resultado.veredicto.value.upper()}[/{color}]\n"
@@ -141,43 +153,105 @@ def mostrar_puntuacion(resultado: ResultadoPuntuacion) -> None:
     ))
 
 
+def mostrar_ia(resultado: ResultadoIA) -> None:
+    """Muestra el análisis del modelo de lenguaje."""
+    titulo = f"Análisis de IA — {escape(resultado.proveedor)} — {resultado.segundos} s"
+    if resultado.analisis is None:
+        consola.print(Panel(f"[yellow]No disponible: {escape(resultado.error)}[/yellow]",
+                            title=titulo, border_style="yellow"))
+        return
+
+    a = resultado.analisis
+    lineas = [
+        f"[bold]¿Phishing?[/bold] {'sí' if a.es_phishing_probable else 'no'} "
+        f"(confianza {a.confianza:.0%})",
+        f"[bold]Tipo de fraude:[/bold] {escape(a.tipo_fraude)}",
+        f"[bold]Tácticas:[/bold] {escape(', '.join(a.tacticas) or '-')}",
+        f"[bold]MITRE ATT&CK:[/bold] {escape(', '.join(a.tecnicas_mitre) or '-')}",
+        "",
+        f"[bold]Explicación:[/bold] {escape(a.explicacion)}",
+        f"[bold]Recomendación:[/bold] {escape(a.recomendacion or '-')}",
+    ]
+    if resultado.avisos:
+        lineas += ["", f"[dim]Avisos de validación: {escape('; '.join(resultado.avisos))}[/dim]"]
+    consola.print(Panel("\n".join(lineas), title=titulo, border_style="cyan"))
+
+
+def mostrar_veredicto_final(final: VeredictoFinal) -> None:
+    color = COLORES_VEREDICTO[final.veredicto]
+    revision = "[bold yellow]Sí[/bold yellow]" if final.revision_manual else "No"
+    consola.print(Panel(
+        f"[{color}]VEREDICTO FINAL: {final.veredicto.value.upper()}[/{color}]\n"
+        f"Puntuación de las reglas: {final.puntuacion_reglas}/100 "
+        f"(veredicto de las reglas: {final.veredicto_reglas.value})\n"
+        f"Revisión manual recomendada: {revision}\n\n"
+        f"{escape(final.motivo)}",
+        title="Resultado final",
+        border_style=color,
+    ))
+
+
 def main() -> int:
     argumentos = argparse.ArgumentParser(
         prog="phishlens",
         description="Analizador de correos de phishing con IA",
     )
     argumentos.add_argument("eml", type=Path, help="ruta al fichero .eml a analizar")
+    argumentos.add_argument("--sin-ia", action="store_true", help="no usar el modelo de lenguaje")
     argumentos.add_argument(
         "--sin-reputacion", action="store_true",
         help="no consultar VirusTotal, AbuseIPDB ni urlscan.io",
     )
     argumentos.add_argument(
         "--sin-red", action="store_true",
-        help="no hacer ninguna conexión: ni DNS (se usa Authentication-Results) ni reputación",
+        help="sin conexiones a internet: ni DNS, ni reputación, ni API externa (Ollama local sí)",
     )
     args = argumentos.parse_args()
 
     if not args.eml.is_file():
-        consola.print(f"[red]Error:[/red] no existe el fichero {args.eml}")
+        consola.print(f"[red]Error:[/red] no existe el fichero {escape(str(args.eml))}")
         return 1
 
+    config = cargar_config()
     correo = parsear_eml(args.eml)
     mostrar_parseo(correo)
 
-    resultado_auth, hallazgos_auth = comprobar_autenticacion(correo, en_linea=not args.sin_red)
+    # 1. Comprobaciones deterministas
+    resultado_auth, hallazgos = comprobar_autenticacion(correo, en_linea=not args.sin_red)
     mostrar_autenticacion(resultado_auth)
+    hallazgos += comprobar_heuristicas(correo)
 
-    hallazgos = hallazgos_auth + comprobar_heuristicas(correo)
-
+    # 2. Reputación
     if not (args.sin_red or args.sin_reputacion):
         with consola.status("Consultando servicios de reputación..."):
-            resultados_rep, hallazgos_rep = enriquecer(correo, cargar_config())
+            resultados_rep, hallazgos_rep = enriquecer(correo, config)
         mostrar_reputacion(resultados_rep)
         hallazgos += hallazgos_rep
 
+    # 3. Saneamiento (detecta texto oculto y prompt injection; siempre se ejecuta)
+    saneado = sanear(correo)
+    hallazgos += saneado.hallazgos
     mostrar_hallazgos(hallazgos)
 
-    mostrar_puntuacion(puntuar(hallazgos))
+    # 4. Puntuación determinista
+    puntuacion = puntuar(hallazgos)
+    mostrar_puntuacion(puntuacion)
+
+    # 5. IA
+    resultado_ia = None
+    if not args.sin_ia:
+        try:
+            proveedor = crear_proveedor(config)
+            if args.sin_red and config.llm_provider != "ollama":
+                raise ErrorProveedor("--sin-red impide usar una API externa")
+            with consola.status(f"Analizando con {proveedor.nombre}..."):
+                resultado_ia = analizar_con_ia(correo, saneado, resultado_auth, hallazgos, puntuacion, proveedor)
+        except ErrorProveedor as exc:
+            resultado_ia = ResultadoIA(proveedor=config.llm_provider, error=str(exc))
+        mostrar_ia(resultado_ia)
+
+    # 6. Veredicto final
+    mostrar_veredicto_final(combinar(puntuacion, resultado_ia))
     return 0
 
 
