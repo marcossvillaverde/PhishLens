@@ -42,6 +42,10 @@ ESTILOS_OCULTOS = [
     r"(^|;)color:(#fff(fff)?|white|rgb\(255,255,255\))(;|$)",
 ]
 
+# Caracteres invisibles que se usan para partir palabras y esquivar filtros
+# (espacio de ancho cero, guion blando, marcas de dirección del texto...)
+CARACTERES_INVISIBLES = re.compile("[\u00ad\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff]")
+
 # Patrones de prompt injection (se buscan sin tildes y en minúsculas)
 PATRONES_INYECCION = [
     r"ignor\w*\s+(todas\s+)?(las\s+)?(instrucciones|indicaciones|reglas)",
@@ -55,6 +59,9 @@ PATRONES_INYECCION = [
     r"(classify|mark|label)\s+(this|the)\s+(email|message)\s+as\s+(safe|legitimate|clean|benign)",
     r"(este|el)\s+(correo|mensaje)\s+es\s+(legitimo|seguro)",
     r"(responde|respond|answer)\s+(solo|unicamente|only)\s+(con|with)",
+    # Imitar el formato de respuesta o los delimitadores de la herramienta
+    r"probabilidad\s+phishing|tipo\s+fraude|tecnicas\s+mitre",
+    r"<<<\s*(fin|inicio|end|start)",
 ]
 
 
@@ -65,6 +72,10 @@ class ContenidoSaneado:
     texto_oculto: str = ""
     truncado: bool = False
     hallazgos: list[Hallazgo] = field(default_factory=list)
+
+
+def quitar_invisibles(texto: str) -> str:
+    return CARACTERES_INVISIBLES.sub("", texto)
 
 
 def _sin_tildes(texto: str) -> str:
@@ -89,13 +100,18 @@ def _es_oculto(etiqueta) -> bool:
 def separar_visible_y_oculto(html: str) -> tuple[str, str]:
     """Devuelve (texto visible, texto oculto) de un cuerpo HTML."""
     soup = BeautifulSoup(html, "html.parser")
+    ocultos = []
     for comentario in soup.find_all(string=lambda s: isinstance(s, Comment)):
+        # Los comentarios condicionales de Outlook (<!--[if mso]>) son normales; el resto
+        # con texto de verdad se considera contenido oculto
+        texto = re.sub(r"<[^>]+>", " ", str(comentario)).strip()
+        if not texto.lower().startswith(("[if", "[endif")) and len(texto.split()) >= 4:
+            ocultos.append(texto)
         comentario.extract()
     for nombre in ETIQUETAS_INVISIBLES:
         for etiqueta in soup.find_all(nombre):
             etiqueta.decompose()
 
-    ocultos = []
     for etiqueta in soup.find_all(True):
         if etiqueta.decomposed:
             continue
@@ -137,7 +153,8 @@ def seudonimizar(texto: str, destinatarios: list[str]) -> str:
 
 def buscar_inyeccion(texto: str) -> str | None:
     """Devuelve el fragmento sospechoso si el texto parece un intento de prompt injection."""
-    plano = _sin_tildes(texto)
+    plano = _sin_tildes(quitar_invisibles(texto))
+    plano = re.sub(r"[_\-]+", " ", plano)      # "ignora_las_instrucciones.pdf" -> "ignora las instrucciones.pdf"
     for patron in PATRONES_INYECCION:
         coincidencia = re.search(patron, plano)
         if coincidencia:
@@ -154,6 +171,7 @@ def sanear(correo: CorreoParseado) -> ContenidoSaneado:
         visible, oculto = separar_visible_y_oculto(correo.cuerpo_html)
     else:
         visible, oculto = _compactar(correo.cuerpo_texto), ""
+    visible = quitar_invisibles(visible)
     resultado.texto_oculto = oculto
 
     if len(oculto) >= 20:
@@ -163,9 +181,17 @@ def sanear(correo: CorreoParseado) -> ContenidoSaneado:
             oculto[:100] + ("..." if len(oculto) > 100 else ""),
         ))
 
-    # Se busca inyección en TODO: texto visible, oculto, versión en texto plano y asunto
-    for origen, texto in (("oculto", oculto), ("visible", visible),
-                          ("texto plano", correo.cuerpo_texto), ("asunto", correo.asunto)):
+    # Se busca inyección en TODO lo que escribe el remitente, no solo en el cuerpo
+    fuentes = (
+        ("oculto", oculto),
+        ("visible", visible),
+        ("texto plano", correo.cuerpo_texto),
+        ("asunto", correo.asunto),
+        ("nombre del remitente", correo.remitente_nombre),
+        ("nombre de adjunto", " | ".join(a.nombre for a in correo.adjuntos)),
+        ("texto de enlace", " | ".join(u.texto_visible for u in correo.urls if u.texto_visible)),
+    )
+    for origen, texto in fuentes:
         fragmento = buscar_inyeccion(texto)
         if fragmento:
             resultado.hallazgos.append(Hallazgo(
