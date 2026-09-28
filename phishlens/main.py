@@ -7,6 +7,8 @@ Uso:
     python -m phishlens.main correo.eml --sin-reputacion  sin consultar VirusTotal, AbuseIPDB ni urlscan
     python -m phishlens.main correo.eml --sin-red         sin conexiones a internet (ni DNS, ni reputación,
                                                           ni API externa; Ollama local sí se usa)
+    python -m phishlens.main correo.eml --informe         además, guarda el informe HTML y JSON en reports/
+    python -m phishlens.main correo.eml --informe DIR     ... o en la carpeta indicada
 
 Seguridad: todo el texto que procede del correo o de la IA se muestra con
 escape() para que no pueda inyectar marcas de formato en la terminal
@@ -22,18 +24,16 @@ from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
-from phishlens.checks.autenticacion import ResultadoAutenticacion, comprobar_autenticacion
-from phishlens.checks.heuristicas import comprobar_heuristicas
+from phishlens.analisis import OpcionesAnalisis, ResultadoAnalisis, analizar
+from phishlens.checks.autenticacion import ResultadoAutenticacion
 from phishlens.checks.modelos import Hallazgo, Severidad
-from phishlens.combinacion import VeredictoFinal, combinar
-from phishlens.config import cargar_config
+from phishlens.combinacion import VeredictoFinal
+from phishlens.config import RAIZ_PROYECTO, cargar_config
 from phishlens.enrichment.base import ResultadoReputacion
-from phishlens.enrichment.enriquecer import enriquecer
-from phishlens.llm.analizador import ResultadoIA, analizar_con_ia
-from phishlens.llm.proveedores import ErrorProveedor, crear_proveedor
-from phishlens.llm.saneamiento import sanear
-from phishlens.parser import CorreoParseado, parsear_eml
-from phishlens.scoring import ResultadoPuntuacion, Veredicto, puntuar
+from phishlens.llm.analizador import ResultadoIA
+from phishlens.parser import CorreoParseado
+from phishlens.report import guardar_informes
+from phishlens.scoring import ResultadoPuntuacion, Veredicto
 
 consola = Console()
 
@@ -191,6 +191,19 @@ def mostrar_veredicto_final(final: VeredictoFinal) -> None:
     ))
 
 
+def mostrar_resultado(r: ResultadoAnalisis) -> None:
+    """Muestra en la terminal todas las secciones del análisis."""
+    mostrar_parseo(r.correo)
+    mostrar_autenticacion(r.autenticacion)
+    if r.opciones.reputacion and r.opciones.en_linea:
+        mostrar_reputacion(r.reputacion)
+    mostrar_hallazgos(r.hallazgos)
+    mostrar_puntuacion(r.puntuacion)
+    if r.ia is not None:
+        mostrar_ia(r.ia)
+    mostrar_veredicto_final(r.final)
+
+
 def main() -> int:
     argumentos = argparse.ArgumentParser(
         prog="phishlens",
@@ -206,52 +219,25 @@ def main() -> int:
         "--sin-red", action="store_true",
         help="sin conexiones a internet: ni DNS, ni reputación, ni API externa (Ollama local sí)",
     )
+    argumentos.add_argument(
+        "--informe", nargs="?", const=RAIZ_PROYECTO / "reports", type=Path, metavar="CARPETA",
+        help="guardar el informe en HTML y JSON (por defecto en reports/)",
+    )
     args = argumentos.parse_args()
 
     if not args.eml.is_file():
         consola.print(f"[red]Error:[/red] no existe el fichero {escape(str(args.eml))}")
         return 1
 
-    config = cargar_config()
-    correo = parsear_eml(args.eml)
-    mostrar_parseo(correo)
+    opciones = OpcionesAnalisis(en_linea=not args.sin_red, reputacion=not args.sin_reputacion, ia=not args.sin_ia)
+    resultado = analizar(args.eml, cargar_config(), opciones,
+                         avisar=lambda mensaje: consola.print(f"[dim]{escape(mensaje)}[/dim]"))
+    mostrar_resultado(resultado)
 
-    # 1. Comprobaciones deterministas
-    resultado_auth, hallazgos = comprobar_autenticacion(correo, en_linea=not args.sin_red)
-    mostrar_autenticacion(resultado_auth)
-    hallazgos += comprobar_heuristicas(correo)
-
-    # 2. Reputación
-    if not (args.sin_red or args.sin_reputacion):
-        with consola.status("Consultando servicios de reputación..."):
-            resultados_rep, hallazgos_rep = enriquecer(correo, config)
-        mostrar_reputacion(resultados_rep)
-        hallazgos += hallazgos_rep
-
-    # 3. Saneamiento (detecta texto oculto y prompt injection; siempre se ejecuta)
-    saneado = sanear(correo)
-    hallazgos += saneado.hallazgos
-    mostrar_hallazgos(hallazgos)
-
-    # 4. Puntuación determinista
-    puntuacion = puntuar(hallazgos)
-    mostrar_puntuacion(puntuacion)
-
-    # 5. IA
-    resultado_ia = None
-    if not args.sin_ia:
-        try:
-            proveedor = crear_proveedor(config)
-            if args.sin_red and config.llm_provider != "ollama":
-                raise ErrorProveedor("--sin-red impide usar una API externa")
-            with consola.status(f"Analizando con {proveedor.nombre}..."):
-                resultado_ia = analizar_con_ia(correo, saneado, resultado_auth, hallazgos, puntuacion, proveedor)
-        except ErrorProveedor as exc:
-            resultado_ia = ResultadoIA(proveedor=config.llm_provider, error=str(exc))
-        mostrar_ia(resultado_ia)
-
-    # 6. Veredicto final
-    mostrar_veredicto_final(combinar(puntuacion, resultado_ia))
+    if args.informe:
+        html, json_ = guardar_informes(resultado, args.informe)
+        consola.print(f"\nInforme HTML: [cyan]{escape(str(html))}[/cyan]")
+        consola.print(f"Informe JSON: [cyan]{escape(str(json_))}[/cyan]")
     return 0
 
 
