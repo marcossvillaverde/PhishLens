@@ -131,7 +131,9 @@ def comprobar_remitente(correo: CorreoParseado) -> list[Hallazgo]:
     if correo.reply_to:
         dominio_reply = dominio_de_correo(correo.reply_to)
         if dominio_organizativo(dominio_reply) != org_from:
-            severidad = Severidad.ALTA if dominio_reply in CORREO_GRATUITO else Severidad.MEDIA
+            # A un correo gratuito: indicio fuerte. A otro dominio: habitual en listas de correo
+            # y envíos de marketing legítimos, así que es un indicio débil
+            severidad = Severidad.ALTA if dominio_reply in CORREO_GRATUITO else Severidad.BAJA
             hallazgos.append(Hallazgo(
                 "REPLY_TO_DISTINTO", "remitente", severidad,
                 "Las respuestas a este correo irían a un dominio distinto del remitente"

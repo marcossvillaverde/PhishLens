@@ -30,9 +30,10 @@ class ResultadoIA:
 
 
 def analizar_con_ia(correo: CorreoParseado, saneado: ContenidoSaneado, auth: ResultadoAutenticacion,
-                    hallazgos: list[Hallazgo], puntuacion: ResultadoPuntuacion, proveedor) -> ResultadoIA:
+                    hallazgos: list[Hallazgo], puntuacion: ResultadoPuntuacion, proveedor,
+                    solo_contenido: bool = False) -> ResultadoIA:
     resultado = ResultadoIA(proveedor=proveedor.nombre)
-    mensaje = construir_mensaje(correo, saneado, auth, hallazgos, puntuacion)
+    mensaje = construir_mensaje(correo, saneado, auth, hallazgos, puntuacion, solo_contenido=solo_contenido)
 
     inicio = time.monotonic()
     try:

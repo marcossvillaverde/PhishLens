@@ -46,6 +46,9 @@ def puntuar(hallazgos: list[Hallazgo]) -> ResultadoPuntuacion:
       para que diez enlaces sin HTTPS no pesen como diez indicios distintos.
     - La suma se limita a 100.
     - Un hallazgo CRÍTICO obliga, como mínimo, a un veredicto SOSPECHOSO.
+    - Solo con hallazgos de severidad BAJA el correo nunca pasa de LIMPIO: son
+      indicios débiles, frecuentes también en correo legítimo, y la evaluación
+      con correos reales mostró que sumados provocaban muchos falsos positivos.
     """
     desglose: dict[str, int] = {}
     for hallazgo in hallazgos:
@@ -59,6 +62,11 @@ def puntuar(hallazgos: list[Hallazgo]) -> ResultadoPuntuacion:
     elif puntuacion >= UMBRAL_SOSPECHOSO:
         veredicto = Veredicto.SOSPECHOSO
     else:
+        veredicto = Veredicto.LIMPIO
+
+    # Indicios débiles: sin ningún hallazgo de severidad MEDIA o superior, el correo es LIMPIO
+    relevantes = {Severidad.MEDIA, Severidad.ALTA, Severidad.CRITICA}
+    if not any(h.severidad in relevantes for h in hallazgos):
         veredicto = Veredicto.LIMPIO
 
     # Regla de seguridad: con un hallazgo crítico nunca se da el correo por limpio

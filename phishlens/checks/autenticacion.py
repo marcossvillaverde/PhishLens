@@ -140,11 +140,20 @@ def comprobar_autenticacion(
         else:
             resultado.dmarc = "pass" if (spf_alineado or dkim_alineado) else "fail"
     else:
-        resultado.spf = cabecera.get("spf", "none")
-        resultado.dkim = cabecera.get("dkim", "none")
-        resultado.dmarc = cabecera.get("dmarc", "none")
+        # Sin red solo se sabe lo que diga la cabecera. Si no dice nada de un
+        # mecanismo, su resultado es DESCONOCIDO: la falta de datos no es un indicio.
+        resultado.spf = cabecera.get("spf", "desconocido")
+        resultado.dkim = cabecera.get("dkim", "desconocido")
+        resultado.dmarc = cabecera.get("dmarc", "desconocido")
 
     hallazgos: list[Hallazgo] = []
+
+    if not en_linea and not cabecera:
+        hallazgos.append(Hallazgo(
+            "AUTENTICACION_DESCONOCIDA", "autenticacion", Severidad.INFO,
+            "El correo no incluye resultados de SPF, DKIM ni DMARC y no se ha consultado el DNS: "
+            "la autenticación del remitente no se ha podido valorar.",
+        ))
 
     # --- SPF ---
     if resultado.spf == "fail":
