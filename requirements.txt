@@ -1,18 +1,18 @@
-# Peticiones HTTP a APIs (VirusTotal, urlscan, AbuseIPDB, Ollama)
-requests
+# Peticiones HTTP a APIs (VirusTotal, urlscan, AbuseIPDB, Ollama, Anthropic)
+requests==2.34.2
 # Consultas DNS para SPF, DKIM y DMARC
-dnspython
+dnspython==2.8.0
 # Verificación de firmas DKIM
-dkimpy
+dkimpy==1.1.8
 # Verificación de SPF
-pyspf
+pyspf==2.0.14
 # Separar dominio y subdominio de las URLs
-tldextract
-# Extraer enlaces y texto del HTML del correo
-beautifulsoup4
-# Cargar las claves del fichero .env
-python-dotenv
-# Salida bonita en la terminal
-rich
+tldextract==5.3.2
+# Extraer enlaces y texto (visible y oculto) del HTML del correo
+beautifulsoup4==4.15.0
+# Cargar la configuración del fichero .env
+python-dotenv==1.2.3
+# Salida en la terminal
+rich==15.0.0
 # Pruebas automáticas
-pytest
+pytest==9.1.1
