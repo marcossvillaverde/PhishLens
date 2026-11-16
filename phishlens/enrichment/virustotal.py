@@ -10,7 +10,13 @@ import base64
 
 import requests
 
-from phishlens.enrichment.base import Cache, LimitadorCuota, ResultadoReputacion, mensaje_http, peticion_get
+from phishlens.enrichment.base import (
+    Cache,
+    LimitadorCuota,
+    ResultadoReputacion,
+    mensaje_http,
+    peticion_get,
+)
 
 URL_BASE = "https://www.virustotal.com/api/v3"
 

@@ -15,6 +15,7 @@ import re
 from dataclasses import dataclass
 
 import dkim
+import dns.exception
 import dns.resolver
 import spf
 
@@ -74,7 +75,7 @@ def verificar_spf(correo: CorreoParseado) -> str:
             timeout=TIMEOUT_DNS,
         )
         return resultado
-    except Exception:
+    except Exception:  # noqa: BLE001 - pyspf procesa DNS controlado por el atacante; cualquier error es un fallo temporal
         return "temperror"
 
 
@@ -92,7 +93,7 @@ def verificar_dkim(correo: CorreoParseado) -> tuple[str, str]:
     try:
         valido = dkim.verify(correo.bytes_originales, timeout=TIMEOUT_DNS)
         return ("pass" if valido else "fail"), dominio_firmante
-    except Exception:
+    except Exception:  # noqa: BLE001 - una firma que hace fallar al verificador se trata como no válida (falla de forma segura)
         return "fail", dominio_firmante
 
 
@@ -102,7 +103,7 @@ def consultar_politica_dmarc(dominio: str) -> str:
         return ""
     try:
         respuesta = dns.resolver.resolve(f"_dmarc.{dominio}", "TXT", lifetime=TIMEOUT_DNS)
-    except Exception:
+    except dns.exception.DNSException:  # sin registro DMARC o DNS no disponible
         return ""
     for registro in respuesta:
         texto = b"".join(registro.strings).decode(errors="replace")

@@ -4,7 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from phishlens.checks.autenticacion import comprobar_autenticacion, leer_authentication_results
+from phishlens.checks.autenticacion import (
+    comprobar_autenticacion,
+    leer_authentication_results,
+)
 from phishlens.checks.heuristicas import (
     comprobar_adjuntos,
     comprobar_heuristicas,

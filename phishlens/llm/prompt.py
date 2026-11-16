@@ -16,7 +16,11 @@ import secrets
 from phishlens.checks.autenticacion import ResultadoAutenticacion
 from phishlens.checks.modelos import Hallazgo, Severidad
 from phishlens.llm.esquema import TACTICAS, TECNICAS_MITRE, TIPOS_FRAUDE
-from phishlens.llm.saneamiento import ContenidoSaneado, desactivar_url, desactivar_urls_en_texto
+from phishlens.llm.saneamiento import (
+    ContenidoSaneado,
+    desactivar_url,
+    desactivar_urls_en_texto,
+)
 from phishlens.parser import CorreoParseado
 from phishlens.scoring import ResultadoPuntuacion
 

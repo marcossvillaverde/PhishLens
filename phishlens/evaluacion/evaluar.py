@@ -70,6 +70,14 @@ class ResultadoCorreo:
     prob_ia_sola: float | None = None
     error_ia: str = ""
     segundos_ia: float = 0.0
+    # Detalle de la respuesta de la IA, para analizar sus errores (H8b).
+    # Solo se guarda en samples/ (fuera de Git), nunca en los resúmenes.
+    tipo_fraude: str = ""
+    tacticas: list[str] = field(default_factory=list)
+    tecnicas_mitre: list[str] = field(default_factory=list)
+    explicacion: str = ""
+    tipo_fraude_sola: str = ""
+    tacticas_sola: list[str] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------- análisis
@@ -95,9 +103,15 @@ def evaluar_correo(ruta: Path, fila: dict, proveedor=None) -> ResultadoCorreo:
     r.veredicto_sistema = combinar(puntuacion, ia).veredicto.value
     if ia.analisis:
         r.prob_ia_con_datos = ia.analisis.probabilidad_phishing
+        r.tipo_fraude = ia.analisis.tipo_fraude
+        r.tacticas = list(ia.analisis.tacticas)
+        r.tecnicas_mitre = list(ia.analisis.tecnicas_mitre)
+        r.explicacion = ia.analisis.explicacion
     ia_sola = analizar_con_ia(correo, saneado, auth, hallazgos, puntuacion, proveedor, solo_contenido=True)
     if ia_sola.analisis:
         r.prob_ia_sola = ia_sola.analisis.probabilidad_phishing
+        r.tipo_fraude_sola = ia_sola.analisis.tipo_fraude
+        r.tacticas_sola = list(ia_sola.analisis.tacticas)
     r.error_ia = "; ".join(e for e in (ia.error, ia_sola.error) if e)
     r.segundos_ia = round(time.monotonic() - inicio, 1)
     return r
@@ -218,8 +232,8 @@ def guardar_resumen(resultados: list[ResultadoCorreo], por_config: dict, modelo:
         lineas.append(f"| {nombre} | {m['n']} | {m['exactitud']:.1%} | {m['deteccion']:.1%} | "
                       f"{m['falsos_positivos']:.1%} | {m['precision']:.1%} | {m['f1']:.2f} | "
                       f"{m['vp']}/{m['fp']}/{m['vn']}/{m['fn']} |")
-    lineas += ["", "Detección = phishing detectado / total de phishing. "
-               "Falsos positivos = legítimos marcados / total de legítimos.", "",
+    lineas += ["", ("Detección = phishing detectado / total de phishing. "
+               "Falsos positivos = legítimos marcados / total de legítimos."), "",
                "## Hallazgos que provocan falsos positivos (reglas)", ""]
     lineas += [f"- {codigo}: {n}" for codigo, n in errores["causas_fp"]] or ["- ninguno"]
     lineas += ["", "## Hallazgos más frecuentes en el phishing", ""]
@@ -256,7 +270,7 @@ def ejecutar(carpeta: Path, proveedor=None, limite: int | None = None, reiniciar
             with consola.status(f"{i}/{len(filas)}: {escape(fila['fichero'])}"):
                 try:
                     r = evaluar_correo(carpeta / fila["fichero"], fila, proveedor)
-                except Exception as exc:   # un correo roto no debe detener la evaluación
+                except Exception as exc:  # noqa: BLE001 - un correo roto no debe detener la evaluación
                     consola.print(f"[yellow]Error con {escape(fila['fichero'])}: {escape(str(exc))}[/yellow]")
                     continue
             salida.write(json.dumps(asdict(r), ensure_ascii=False) + "\n")

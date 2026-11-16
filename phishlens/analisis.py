@@ -7,12 +7,15 @@ puedan usar tanto la salida por terminal (main.py) como los informes
 """
 
 import hashlib
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
 
-from phishlens.checks.autenticacion import ResultadoAutenticacion, comprobar_autenticacion
+from phishlens.checks.autenticacion import (
+    ResultadoAutenticacion,
+    comprobar_autenticacion,
+)
 from phishlens.checks.heuristicas import comprobar_heuristicas
 from phishlens.checks.modelos import Hallazgo
 from phishlens.combinacion import VeredictoFinal, combinar

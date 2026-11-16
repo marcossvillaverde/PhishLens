@@ -30,7 +30,7 @@ class VeredictoFinal:
 
 def combinar(puntuacion: ResultadoPuntuacion, ia: ResultadoIA | None) -> VeredictoFinal:
     reglas = puntuacion.veredicto
-    base = dict(veredicto_reglas=reglas, puntuacion_reglas=puntuacion.puntuacion)
+    base = {"veredicto_reglas": reglas, "puntuacion_reglas": puntuacion.puntuacion}
 
     if ia is None or ia.analisis is None:
         motivo = "Veredicto basado solo en las reglas"

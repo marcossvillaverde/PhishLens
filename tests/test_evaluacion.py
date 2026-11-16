@@ -7,7 +7,12 @@ import shutil
 from pathlib import Path
 
 import phishlens.evaluacion.evaluar as ev
-from phishlens.evaluacion.evaluar import ResultadoCorreo, configuraciones, ejecutar, metricas
+from phishlens.evaluacion.evaluar import (
+    ResultadoCorreo,
+    configuraciones,
+    ejecutar,
+    metricas,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -121,25 +126,9 @@ def test_reintenta_los_correos_en_los_que_fallo_la_ia(tmp_path):
     assert otro.llamadas == 0
 
 
-class ModeloCaido:
-    """Simula que Ollama no responde. Mismo nombre que ModeloFalso: comparten fichero de resultados."""
-    nombre = "modelo falso"
-
-    def generar(self, sistema, mensaje):
-        from phishlens.llm.proveedores import ErrorProveedor
-        raise ErrorProveedor("no se puede conectar con Ollama")
-
-
-def test_reintenta_los_correos_en_los_que_fallo_la_ia(tmp_path):
-    corpus = _corpus(tmp_path)
-    fallidos = ejecutar(corpus, ModeloCaido())
-    assert all(r.error_ia for r in fallidos)
-    # Con el modelo funcionando, los dos correos se vuelven a analizar
-    modelo = ModeloFalso()
-    resultados = ejecutar(corpus, modelo)
-    assert modelo.llamadas == 4
-    assert not any(r.error_ia for r in resultados)
-    # Y una tercera vez ya salen de la caché, sin llamar al modelo
-    otro = ModeloFalso()
-    ejecutar(corpus, otro)
-    assert otro.llamadas == 0
+def test_guarda_el_detalle_de_la_respuesta_de_la_ia(tmp_path):
+    resultados = ejecutar(_corpus(tmp_path), ModeloFalso())
+    for r in resultados:
+        assert r.tipo_fraude == "otro" and r.tipo_fraude_sola == "otro"
+        assert r.explicacion == "x"
+        assert r.tacticas == [] and r.tecnicas_mitre == []

@@ -5,9 +5,14 @@ comprueban que las métricas se calculan bien en los casos extremos.
 
 import json
 
-from phishlens.redteam.corpus import generar_ataques
-from phishlens.redteam.evaluar import PROMPT_INGENUO, _mensaje_ingenuo, evaluar_ataque, resumen
 from phishlens.parser import parsear_bytes
+from phishlens.redteam.corpus import generar_ataques
+from phishlens.redteam.evaluar import (
+    PROMPT_INGENUO,
+    _mensaje_ingenuo,
+    evaluar_ataque,
+    resumen,
+)
 
 ATAQUES = {a.id: a for a in generar_ataques()}
 

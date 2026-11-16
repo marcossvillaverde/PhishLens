@@ -149,7 +149,7 @@ def _procesar_adjunto(parte: EmailMessage) -> Adjunto:
         nombre=parte.get_filename() or "(sin nombre)",
         tipo_mime=parte.get_content_type(),
         tamano=len(datos),
-        md5=hashlib.md5(datos).hexdigest(),
+        md5=hashlib.md5(datos, usedforsecurity=False).hexdigest(),  # identificador del fichero, no protección
         sha256=hashlib.sha256(datos).hexdigest(),
     )
 

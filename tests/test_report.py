@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-import phishlens.analisis as analisis
+from phishlens import analisis
 from phishlens.analisis import OpcionesAnalisis, analizar
 from phishlens.config import Config
 from phishlens.redteam.corpus import construir

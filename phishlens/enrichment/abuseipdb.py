@@ -5,7 +5,12 @@ El plan gratuito permite 1.000 consultas al día.
 
 import requests
 
-from phishlens.enrichment.base import Cache, ResultadoReputacion, mensaje_http, peticion_get
+from phishlens.enrichment.base import (
+    Cache,
+    ResultadoReputacion,
+    mensaje_http,
+    peticion_get,
+)
 
 URL_CHECK = "https://api.abuseipdb.com/api/v2/check"
 

@@ -8,7 +8,12 @@ informativo: indica si el dominio ya ha sido analizado y enlaza al último infor
 
 import requests
 
-from phishlens.enrichment.base import Cache, ResultadoReputacion, mensaje_http, peticion_get
+from phishlens.enrichment.base import (
+    Cache,
+    ResultadoReputacion,
+    mensaje_http,
+    peticion_get,
+)
 
 URL_BUSQUEDA = "https://urlscan.io/api/v1/search/"
 

@@ -1,7 +1,7 @@
 # Peticiones HTTP a APIs (VirusTotal, urlscan, AbuseIPDB, Ollama, Anthropic)
 requests==2.34.2
 # Consultas DNS para SPF, DKIM y DMARC
-dnspython==2.8.0
+dnspython==2.9.2
 # Verificación de firmas DKIM
 dkimpy==1.1.8
 # Verificación de SPF

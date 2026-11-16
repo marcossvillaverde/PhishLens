@@ -142,7 +142,7 @@ def comprobar_remitente(correo: CorreoParseado) -> list[Hallazgo]:
             ))
 
     # Return-Path distinto del From: el "remitente de sobre" es otro
-    if correo.return_path:
+    if correo.return_path:  # noqa: SIM102 - dos condiciones separadas se leen mejor
         if dominio_organizativo(dominio_de_correo(correo.return_path)) != org_from:
             hallazgos.append(Hallazgo(
                 "RETURN_PATH_DISTINTO", "remitente", Severidad.BAJA,

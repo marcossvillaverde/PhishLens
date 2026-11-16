@@ -66,7 +66,8 @@ def descargar_phishing(cantidad: int, destino: Path, sesion=None, semilla: int =
     """
     sesion = sesion or requests.Session()
     destino.mkdir(parents=True, exist_ok=True)
-    candidatos = random.Random(semilla).sample(range(1, MAX_INDICE_PHISHING + 1), MAX_INDICE_PHISHING)
+    # Muestreo reproducible del corpus: no es un uso criptográfico (bandit B311)
+    candidatos = random.Random(semilla).sample(range(1, MAX_INDICE_PHISHING + 1), MAX_INDICE_PHISHING)  # nosec B311
     guardados: list[Path] = []
     vistos: set[str] = set()
 
@@ -118,7 +119,8 @@ def extraer_legitimos(archivo_tar: Path, cantidad: int, destino: Path, semilla: 
             and _nombre_legitimo(m) not in excluir
         ]
         miembros.sort(key=lambda m: m.name)
-        elegidos = random.Random(semilla).sample(miembros, min(cantidad, len(miembros)))
+        # Muestreo reproducible del corpus: no es un uso criptográfico (bandit B311)
+        elegidos = random.Random(semilla).sample(miembros, min(cantidad, len(miembros)))  # nosec B311
         guardados = []
         for miembro in elegidos:
             try:

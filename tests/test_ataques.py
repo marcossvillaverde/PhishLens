@@ -17,13 +17,12 @@ import unicodedata
 import pytest
 from rich.console import Console
 
-import phishlens.main as main
+from phishlens import main
 from phishlens.checks.autenticacion import comprobar_autenticacion
 from phishlens.checks.heuristicas import comprobar_heuristicas
 from phishlens.combinacion import combinar
 from phishlens.llm.analizador import analizar_con_ia
 from phishlens.llm.prompt import construir_mensaje
-from phishlens.llm.proveedores import ErrorProveedor
 from phishlens.llm.saneamiento import sanear
 from phishlens.parser import parsear_bytes
 from phishlens.redteam.corpus import construir, generar_ataques

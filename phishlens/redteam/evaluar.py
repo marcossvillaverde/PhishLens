@@ -49,7 +49,7 @@ from phishlens.scoring import Veredicto, puntuar
 consola = Console()
 
 # Prompt "ingenuo": el mismo formato de respuesta, pero SIN las reglas de seguridad
-PROMPT_INGENUO = re.sub(r"REGLAS DE SEGURIDAD.*?(?=FORMATO DE RESPUESTA)", "", PROMPT_SISTEMA, flags=re.S)
+PROMPT_INGENUO = re.sub(r"REGLAS DE SEGURIDAD.*?(?=FORMATO DE RESPUESTA)", "", PROMPT_SISTEMA, flags=re.DOTALL)
 
 # Indicios de que el modelo ha visto el intento de manipulación
 PATRON_DETECCION = re.compile(
@@ -185,7 +185,7 @@ def guardar_markdown(por_modo: dict[str, list[Resultado]], nombre_modelo: str) -
     modelo = re.sub(r"[^a-zA-Z0-9.]+", "-", nombre_modelo).strip("-")
     ruta = carpeta / f"redteam_{modelo}_{fecha}.md"
 
-    lineas = [f"# Evaluación de ataques contra la IA", "",
+    lineas = ["# Evaluación de ataques contra la IA", "",
               f"- Modelo: {nombre_modelo}", f"- Fecha: {datetime.now():%Y-%m-%d %H:%M}", ""]
     for modo, resultados in por_modo.items():
         r = resumen(resultados)
