@@ -284,6 +284,8 @@ def main() -> int:
             if args.una_vez:
                 return 0
             args.ultimos = 0          # --ultimos solo tiene sentido en la primera revisión
+            proxima = time.strftime("%H:%M:%S", time.localtime(time.time() + intervalo))
+            consola.print(f"[dim]Próxima revisión a las {proxima}. Ctrl+C para salir.[/dim]")
             time.sleep(intervalo)
     except KeyboardInterrupt:
         consola.print("\nVigilancia detenida.")
