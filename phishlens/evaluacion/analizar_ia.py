@@ -95,8 +95,8 @@ def main() -> int:
     legit = [r for r in res if r["etiqueta"] == "legitimo"]
     phish = [r for r in res if r["etiqueta"] == "phishing"]
     salida = [f"# Análisis de la IA (H8b) — conjunto de {conjunto}", "",
-              f"Correos: {len(res)} ({len(phish)} phishing, {len(legit)} legítimos). "
-              f"Sin respuesta de la IA: {sum(1 for r in res if r.get('prob_ia_con_datos') is None)}.", ""]
+              (f"Correos: {len(res)} ({len(phish)} phishing, {len(legit)} legítimos). "
+              f"Sin respuesta de la IA: {sum(1 for r in res if r.get('prob_ia_con_datos') is None)}."), ""]
 
     # 1. Qué probabilidades da la IA a cada tipo de correo
     salida += ["## 1. Probabilidades que da la IA (con datos técnicos)", "",
