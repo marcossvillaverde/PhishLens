@@ -3,7 +3,7 @@ Combinación del veredicto de las reglas con el análisis de la IA.
 
 Principio de diseño: EL MOTOR DETERMINISTA DECIDE Y LA IA INTERPRETA.
   - La IA puede SUBIR el veredicto como mucho un nivel (limpio -> sospechoso,
-    sospechoso -> phishing), y solo si está segura (probabilidad de phishing >= 0.7).
+    sospechoso -> phishing), y solo si está segura (probabilidad de phishing >= 0.85).
   - La IA NUNCA puede bajar el veredicto. Si no está de acuerdo con unas
     reglas que ven riesgo, se mantiene el veredicto y se pide revisión manual.
 Así, aunque un atacante consiguiera manipular al modelo, no podría hacer
@@ -15,7 +15,11 @@ from dataclasses import dataclass
 from phishlens.llm.analizador import ResultadoIA
 from phishlens.scoring import ResultadoPuntuacion, Veredicto
 
-UMBRAL_SUBIR = 0.7       # probabilidad a partir de la cual la IA puede subir el veredicto
+# Probabilidad a partir de la cual la IA puede subir el veredicto.
+# H8b: era 0.7. En el conjunto de desarrollo, el modelo daba 70-80 % a muchos correos
+# legítimos (su respuesta de "no estoy seguro") y ninguno legítimo pasaba del 80 %.
+# Con 0.85, los falsos positivos bajaron del 41 % al 1 % y la detección quedó en el 89 %.
+UMBRAL_SUBIR = 0.85
 ORDEN = [Veredicto.LIMPIO, Veredicto.SOSPECHOSO, Veredicto.PHISHING]
 
 

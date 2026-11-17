@@ -132,3 +132,34 @@ def test_guarda_el_detalle_de_la_respuesta_de_la_ia(tmp_path):
         assert r.tipo_fraude == "otro" and r.tipo_fraude_sola == "otro"
         assert r.explicacion == "x"
         assert r.tacticas == [] and r.tecnicas_mitre == []
+
+
+class ModeloConProbabilidad:
+    """Devuelve siempre la misma probabilidad de phishing."""
+    nombre = "modelo umbral"
+
+    def __init__(self, prob):
+        self.prob = prob
+
+    def generar(self, sistema, mensaje):
+        return json.dumps({"probabilidad_phishing": self.prob, "tipo_fraude": "otro", "tacticas": [],
+                           "tecnicas_mitre": [], "explicacion": "x", "recomendacion": "-"})
+
+
+def _sistema_con_probabilidad(prob):
+    """Veredicto final de un correo legítimo (limpio para las reglas) con una IA que dice `prob`."""
+    ruta = FIXTURES / "legitimo_simple.eml"
+    fila = {"fichero": "legitimo_simple.eml", "etiqueta": "legitimo", "fuente": "prueba",
+            "sha256": hashlib.sha256(ruta.read_bytes()).hexdigest()}
+    r = ev.evaluar_correo(ruta, fila, ModeloConProbabilidad(prob))
+    assert r.veredicto_reglas == "limpio"
+    return r.veredicto_sistema
+
+
+def test_h8b_ia_con_80_por_ciento_no_sube_el_veredicto():
+    # El 70-80 % es la respuesta de "no estoy seguro" del modelo: no basta para alertar
+    assert _sistema_con_probabilidad(0.8) == "limpio"
+
+
+def test_h8b_ia_muy_segura_si_sube_el_veredicto():
+    assert _sistema_con_probabilidad(0.9) == "sospechoso"
