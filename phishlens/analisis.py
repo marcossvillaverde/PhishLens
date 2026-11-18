@@ -28,7 +28,7 @@ from phishlens.llm.saneamiento import ContenidoSaneado, sanear
 from phishlens.parser import CorreoParseado, parsear_bytes
 from phishlens.scoring import ResultadoPuntuacion, puntuar
 
-VERSION = "0.7"
+VERSION = "1.0"
 
 
 @dataclass
