@@ -129,10 +129,19 @@ def cargar_cache(ruta: Path) -> dict[str, dict]:
     if not ruta.is_file():
         return {}
     cache = {}
+    danadas = 0
     for linea in ruta.read_text(encoding="utf-8").splitlines():
-        if linea.strip():
+        if not linea.strip():
+            continue
+        try:
             datos = json.loads(linea)
             cache[datos["sha256"]] = datos
+        except (ValueError, KeyError, TypeError):
+            # Línea cortada (p. ej. por una interrupción al escribir): ese correo se vuelve a analizar
+            danadas += 1
+    if danadas:
+        consola.print(f"[yellow]Se han ignorado {danadas} líneas dañadas de {ruta.name}; "
+                      f"esos correos se volverán a analizar.[/yellow]")
     return cache
 
 

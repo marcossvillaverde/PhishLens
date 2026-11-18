@@ -163,3 +163,15 @@ def test_h8b_ia_con_80_por_ciento_no_sube_el_veredicto():
 
 def test_h8b_ia_muy_segura_si_sube_el_veredicto():
     assert _sistema_con_probabilidad(0.9) == "sospechoso"
+
+
+def test_cache_con_lineas_danadas_no_detiene_la_evaluacion(tmp_path):
+    corpus = _corpus(tmp_path)
+    ejecutar(corpus, ModeloFalso())
+    cache = next(corpus.glob("resultados_*.jsonl"))
+    # Simula una escritura cortada: una línea a medias y otra con bytes nulos
+    with cache.open("a", encoding="utf-8") as f:
+        f.write('{"fichero": "a medias\n\x00\x00\x00\n')
+    modelo = ModeloFalso()
+    resultados = ejecutar(corpus, modelo)
+    assert len(resultados) == 2 and modelo.llamadas == 0
